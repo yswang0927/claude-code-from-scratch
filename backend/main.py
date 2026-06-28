@@ -9,6 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+from dataclasses import asdict, is_dataclass
 import json
 
 from agent_service import agent_service
@@ -45,6 +46,21 @@ class AddContextFileRequest(BaseModel):
 class RemoveContextFileRequest(BaseModel):
     session_id: str
     file_path: str
+
+
+def serialize_message(message):
+    """序列化消息，确保旧内存对象也包含 tool_calls 字段。"""
+    if is_dataclass(message):
+        data = asdict(message)
+    else:
+        data = {
+            "id": getattr(message, "id", None),
+            "role": getattr(message, "role", None),
+            "content": getattr(message, "content", ""),
+            "timestamp": getattr(message, "timestamp", None),
+        }
+    data.setdefault("tool_calls", getattr(message, "tool_calls", None))
+    return data
 
 
 # ==================== REST API Endpoints ====================
@@ -89,15 +105,7 @@ async def get_session(session_id: str):
         "title": session.title,
         "created": session.created,
         "updated": session.updated,
-        "messages": [
-            {
-                "id": m.id,
-                "role": m.role,
-                "content": m.content,
-                "timestamp": m.timestamp
-            }
-            for m in session.messages
-        ],
+        "messages": [serialize_message(m) for m in session.messages],
         "context_files": session.context_files
     }
 

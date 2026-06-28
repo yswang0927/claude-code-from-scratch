@@ -282,6 +282,7 @@ class AgentService:
         
         # 开始Agent循环
         assistant_content_parts = []
+        assistant_tool_calls: List[Dict[str, Any]] = []
         
         try:
             while True:
@@ -308,6 +309,10 @@ class AgentService:
                 tool_results = []
                 for block in response.content:
                     if block.type == "tool_use":
+                        tool_record = {
+                            "name": block.name,
+                            "input": block.input,
+                        }
                         yield {
                             "type": "tool_call",
                             "content": f"🔧 {block.name}",
@@ -322,6 +327,8 @@ class AgentService:
                             "content": result[:200] + ("..." if len(result) > 200 else ""),
                             "metadata": {"tool": block.name}
                         }
+                        tool_record["result"] = result
+                        assistant_tool_calls.append(tool_record)
                         
                         tool_results.append({
                             "type": "tool_result",
@@ -337,7 +344,8 @@ class AgentService:
                 id=uuid.uuid4().hex[:8],
                 role="assistant",
                 content="".join(assistant_content_parts),
-                timestamp=datetime.now().isoformat()
+                timestamp=datetime.now().isoformat(),
+                tool_calls=assistant_tool_calls or None
             )
             session.messages.append(assistant_msg)
             self._save_session(session)

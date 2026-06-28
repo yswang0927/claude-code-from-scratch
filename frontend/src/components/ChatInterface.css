@@ -212,6 +212,31 @@
   margin: 0.5rem 0;
 }
 
+.message-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  display: block;
+  overflow-x: auto;
+}
+
+.message-content th,
+.message-content td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-content th {
+  background: var(--bg-primary);
+  font-weight: 600;
+}
+
+.message-content tr:nth-child(even) td {
+  background: var(--bg-primary);
+}
+
 .message-content p {
   margin: 0.5rem 0;
 }
@@ -222,4 +247,38 @@
 
 .message-content p:last-child {
   margin-bottom: 0;
+}
+
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.tool-call-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.tool-call-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-section-label {
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.tool-call-card pre {
+  white-space: pre-wrap;
+  word-break: break-word;
 }

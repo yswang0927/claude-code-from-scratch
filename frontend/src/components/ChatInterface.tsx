@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Menu, File, FolderOpen, X, Send, Loader } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { SessionDetail, Message, ContextFile, StreamChunk } from '../types'
+import remarkGfm from 'remark-gfm'
+import { SessionDetail, Message, ContextFile, StreamChunk, ToolCall } from '../types'
 import { api } from '../api'
 import FileBrowser from './FileBrowser'
 import './ChatInterface.css'
@@ -22,6 +23,55 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const markdownPlugins = [remarkGfm]
+
+  const formatJson = (value: any) => {
+    if (value === undefined || value === null || value === '') return ''
+    try {
+      return JSON.stringify(value, null, 2)
+    } catch {
+      return String(value)
+    }
+  }
+
+  const appendToolCall = (chunk: StreamChunk) => {
+    const toolName = chunk.metadata?.name || chunk.content.replace(/^🔧\s*/, '')
+    const input = formatJson(chunk.metadata?.input)
+    const inputBlock = input ? `\n\nInput:\n\`\`\`json\n${input}\n\`\`\`` : ''
+    setStreamingContent(prev => `${prev}\n\n🔧 **Tool:** \`${toolName}\`${inputBlock}\n`)
+  }
+
+  const appendToolResult = (chunk: StreamChunk) => {
+    const toolName = chunk.metadata?.tool ? ` \`${chunk.metadata.tool}\`` : ''
+    setStreamingContent(prev => `${prev}\n**Result${toolName}:**\n\`\`\`text\n${chunk.content}\n\`\`\`\n`)
+  }
+
+  const renderToolCalls = (toolCalls?: ToolCall[]) => {
+    console.log('toolCalls:', toolCalls);
+    if (!toolCalls?.length) return null;
+
+    return (
+      <div className="tool-calls">
+        {toolCalls.map((toolCall, index) => (
+          <details className="tool-call-card" key={`${toolCall.name}-${index}`} open>
+            <summary>🔧 {toolCall.name}</summary>
+            {toolCall.input !== undefined && (
+              <>
+                <div className="tool-section-label">Input</div>
+                <pre>{formatJson(toolCall.input)}</pre>
+              </>
+            )}
+            {toolCall.result && (
+              <>
+                <div className="tool-section-label">Result</div>
+                <pre>{toolCall.result}</pre>
+              </>
+            )}
+          </details>
+        ))}
+      </div>
+    )
+  }
 
   // 加载会话详情
   useEffect(() => {
@@ -61,12 +111,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
       console.log('WebSocket connected')
     }
     
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       const chunk: StreamChunk = JSON.parse(event.data)
       
       switch (chunk.type) {
         case 'thinking':
-          setStreamingContent('')
+          // 后端每一轮模型思考前都会发送 thinking；不要清空已收到的工具日志。
           break
         
         case 'text':
@@ -74,18 +124,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
           break
         
         case 'tool_call':
-          setStreamingContent(prev => prev + `\n\n🔧 **Tool:** ${chunk.content}\n`)
+          appendToolCall(chunk)
           break
         
         case 'tool_result':
-          setStreamingContent(prev => prev + `\n✓ Result: ${chunk.content}\n`)
+          appendToolResult(chunk)
           break
         
         case 'done':
-          // 流式完成，重新加载会话
-          loadSession()
-          setStreamingContent('')
+          // 流式完成后先加载持久化消息，再清掉临时流内容，避免工具信息闪一下消失。
+          await loadSession()
           setIsStreaming(false)
+          setStreamingContent('')
           break
         
         case 'error':
@@ -116,6 +166,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
     const userMessage = input.trim()
     setInput('')
     setIsStreaming(true)
+    setStreamingContent('')
 
     // 添加用户消息到界面
     const tempMessage: Message = {
@@ -215,7 +266,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
               {message.role === 'user' ? '👤' : '🤖'}
             </div>
             <div className="message-content">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              {renderToolCalls(message.tool_calls)}
+              <ReactMarkdown remarkPlugins={markdownPlugins}>{message.content}</ReactMarkdown>
             </div>
           </div>
         ))}
@@ -225,7 +277,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
           <div className="message assistant streaming">
             <div className="message-avatar">🤖</div>
             <div className="message-content">
-              <ReactMarkdown>{streamingContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={markdownPlugins}>{streamingContent}</ReactMarkdown>
             </div>
           </div>
         )}

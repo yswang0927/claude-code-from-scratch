@@ -10,7 +10,7 @@ export const api = {
   },
 
   async getSession(sessionId: string): Promise<SessionDetail> {
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}`)
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}`, { cache: 'no-store' })
     return res.json()
   },
 
