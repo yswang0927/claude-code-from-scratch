@@ -53,7 +53,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
     return (
       <div className="tool-calls">
         {toolCalls.map((toolCall, index) => (
-          <details className="tool-call-card" key={`${toolCall.name}-${index}`} open>
+          <details className="tool-call-card" key={`${toolCall.name}-${index}`}>
             <summary>🔧 {toolCall.name}</summary>
             {toolCall.input !== undefined && (
               <>
