@@ -417,22 +417,37 @@ class AgentService:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """流式调用LLM"""
         loop = asyncio.get_event_loop()
+        queue = asyncio.Queue()
+        done = asyncio.Event()
         
         def _blocking_stream():
-            with client.messages.stream(
-                model=MODEL,
-                system=self.system_prompt,
-                messages=messages,
-                tools=EXTENDED_TOOLS,
-                max_tokens=8000,
-            ) as stream:
-                for text in stream.text_stream:
-                    yield {"type": "text", "content": text}
-                yield {"type": "response", "response": stream.get_final_message()}
+            try:
+                with client.messages.stream(
+                    model=MODEL,
+                    system=self.system_prompt,
+                    messages=messages,
+                    tools=EXTENDED_TOOLS,
+                    max_tokens=8000,
+                ) as stream:
+                    for text in stream.text_stream:
+                        loop.call_soon_threadsafe(queue.put_nowait, {"type": "text", "content": text})
+                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "response", "response": stream.get_final_message()})
+            finally:
+                loop.call_soon_threadsafe(done.set)
         
         # 在线程池中执行同步流式调用
-        for chunk in await loop.run_in_executor(None, lambda: list(_blocking_stream())):
-            yield chunk
+        executor_task = loop.run_in_executor(None, _blocking_stream)
+        
+        try:
+            while not done.is_set() or not queue.empty():
+                try:
+                    # 等待队列中的chunk，设置超时以定期检查done事件
+                    chunk = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield chunk
+                except asyncio.TimeoutError:
+                    continue
+        finally:
+            await executor_task
     
     async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
         """执行工具调用"""

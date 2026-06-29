@@ -47,7 +47,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
   }
 
   const renderToolCalls = (toolCalls?: ToolCall[]) => {
-    console.log('toolCalls:', toolCalls);
     if (!toolCalls?.length) return null;
 
     return (
@@ -113,7 +112,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId, onToggleSideba
     
     ws.onmessage = async (event) => {
       const chunk: StreamChunk = JSON.parse(event.data)
-      
+      console.log(event.data);
+
       switch (chunk.type) {
         case 'thinking':
           // 后端每一轮模型思考前都会发送 thinking；不要清空已收到的工具日志。
